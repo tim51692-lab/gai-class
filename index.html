@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NEON PINBALL — 霓虹彈珠台</title>
+  <style>
+    :root { color-scheme: dark; --cyan: #63e9ff; --purple: #a785ff; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: radial-gradient(ellipse at 50% 45%, #181330 0%, #080b16 65%); color: #eef4ff; font-family: "Segoe UI", sans-serif; }
+    body::before { content: ""; position: fixed; inset: 0; pointer-events: none; background-image: linear-gradient(#8799ff05 1px, transparent 1px), linear-gradient(90deg, #8799ff05 1px, transparent 1px); background-size: 48px 48px; }
+    main { position: relative; width: min(100% - 40px, 640px); margin: 0 auto; padding: 28px 0 24px; text-align: center; }
+    .eyebrow { margin: 0 0 8px; font-size: 10px; letter-spacing: 4px; color: var(--cyan); }
+    h1 { margin: 0; font-size: clamp(25px, 4vw, 36px); font-weight: 800; letter-spacing: 6px; text-shadow: 0 0 25px #8c67ff60; }
+    h1 span { color: var(--cyan); }
+    .subtitle { color: #8992ad; font-size: 12px; margin: 10px 0 22px; letter-spacing: 2px; }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid #807aff30; border-radius: 12px; background: #111426cc; margin-bottom: 18px; padding: 15px 0; }
+    .stat + .stat { border-left: 1px solid #807aff25; }
+    .stat-label { display: block; color: #939cb9; font-size: 10px; text-transform: uppercase; letter-spacing: 1.6px; margin-bottom: 7px; }
+    .stat-value { font-family: Consolas, monospace; font-size: 25px; color: var(--cyan); }
+    .stat:last-child .stat-value { color: var(--purple); }
+    .cabinet { position: relative; width: min(100%, 360px); margin: auto; padding: 9px; background: linear-gradient(145deg, #282549, #111827); border: 1px solid #7b6dcf; border-radius: 23px; box-shadow: 0 0 35px #794eff20, 0 0 12px #43daff12, inset 0 0 0 3px #090c18; }
+    canvas { display: block; width: 100%; aspect-ratio: 340 / 480; border-radius: 15px; background: #0a0e1b; }
+    .overlay { position: absolute; inset: 9px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 15px; background: linear-gradient(transparent, #090d1b70, transparent); pointer-events: none; }
+    .badge { border: 1px solid #a785ff70; background: #18152fd9; color: #c3afff; font-size: 9px; letter-spacing: 3px; padding: 7px 12px; border-radius: 30px; }
+    .overlay h2 { margin: 16px 0 8px; font-size: 26px; letter-spacing: 3px; text-shadow: 0 0 20px #71dfff80; }
+    .overlay p { margin: 0; color: #a5b0ca; font-size: 12px; }
+    .overlay[hidden] { display: none; }
+    button { width: min(100%, 360px); margin-top: 20px; padding: 14px; border: 1px solid #a49bff; border-radius: 9px; background: linear-gradient(110deg, #6254df, #8c4fd5); color: white; font: 600 13px "Segoe UI", sans-serif; letter-spacing: 2px; cursor: pointer; box-shadow: 0 0 24px #8260ff30; transition: filter .2s, transform .2s; }
+    button:hover { filter: brightness(1.18); transform: translateY(-1px); }
+    button:focus-visible { outline: 3px solid var(--cyan); outline-offset: 4px; }
+    .note { margin: 13px 0 0; color: #77829e; font-size: 11px; line-height: 1.6; }
+    footer { margin-top: 20px; color: #505c79; font-size: 9px; letter-spacing: 2px; }
+    @media (max-width: 420px) { main { width: calc(100% - 28px); padding-top: 22px; } .stat-label { font-size: 8px; letter-spacing: .8px; } .stat-value { font-size: 22px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <p class="eyebrow">THE ARCADE / 001</p>
+      <h1>NEON <span>PINBALL</span></h1>
+      <p class="subtitle">霓虹彈珠台 · 點亮你的遊戲時刻</p>
+    </header>
+    <section class="stats" aria-label="遊戲狀態">
+      <div class="stat"><span class="stat-label">Score</span><span class="stat-value" id="score">0</span></div>
+      <div class="stat"><span class="stat-label">High Score</span><span class="stat-value" id="high-score">0</span></div>
+      <div class="stat"><span class="stat-label">Lives</span><span class="stat-value" id="lives">3</span></div>
+      <div class="stat"><span class="stat-label">Combo</span><span class="stat-value" id="combo">x1</span></div>
+    </section>
+    <div class="cabinet">
+      <canvas id="game-canvas" width="340" height="480" aria-label="霓虹彈珠台：使用左右方向鍵控制擋板">你的瀏覽器不支援 Canvas，請使用較新的瀏覽器。</canvas>
+      <div class="overlay" aria-live="polite">
+        <span class="badge">BUMPER SCORE PREVIEW</span>
+        <h2 id="status-title">READY TO PLAY</h2>
+        <p id="status-message">按下 Start Game 發球</p>
+      </div>
+    </div>
+    <button id="start-button" type="button">▶ &nbsp; Start Game</button>
+    <p class="note">← 左擋板 · → 右擋板 · 按住抬起，放開復位<br>撞擊 Bumper +100 · 按 Start Game 重設分數並重新發球</p>
+    <footer>BLUE LIGHTS. PURPLE NIGHTS.</footer>
+  </main>
+  <script>
+    // 集中保存狀態，之後加入遊戲功能時可以使用相同資料。
+    const gameState = { score: 0, highScore: 0, lives: 3, combo: 1 };
+    const canvas = document.getElementById('game-canvas');
+    const context = canvas.getContext('2d');
+    const overlay = document.querySelector('.overlay');
+    const table = { width: 340, height: 480, left: 22, right: 303, top: 32 };
+    // 可見軌道共用同一份座標繪圖與碰撞，避免看得到牆、球卻穿過。
+    const wallPaths = [
+      { color: '#9671ff', points: [[49, 377], [39, 346], [39, 91], [63, 49], [262, 49], [287, 91], [287, 346], [273, 377]] },
+      { color: '#805de0', points: [[48, 345], [75, 385], [109, 399]] },
+      { color: '#805de0', points: [[278, 345], [251, 385], [217, 399]] }
+    ];
+    const wallRadius = 1; // 霓虹線寬為 2，碰撞包含線條本身的厚度。
+    // 速度使用「像素／秒」，重力使用「像素／秒²」。y 往下增加。
+    const gravity = 420;
+    const restitution = 0.88; // 反彈後保留 88% 的速度。
+    const ball = { x: 163, y: 290, radius: 8, vx: 230, vy: -330 };
+    let running = false;
+    let animationId = null;
+    let previousTime = null;
+    const keys = { ArrowLeft: false, ArrowRight: false };
+    // 沿用上方圓環的三角排列；同一個 radius 同時用於繪圖與碰撞。
+    const bumpers = [
+      { x: 112, y: 119, radius: 22, color: '#60dfff', flash: 0, touching: false, cooldown: 0 },
+      { x: 213, y: 119, radius: 22, color: '#a785ff', flash: 0, touching: false, cooldown: 0 },
+      { x: 163, y: 185, radius: 22, color: '#ff79ce', flash: 0, touching: false, cooldown: 0 }
+    ];
+    const scorePopups = [];
+
+    function updateBumperEffects(dt) {
+      for (const bumper of bumpers) {
+        bumper.flash = Math.max(0, bumper.flash - dt);
+        bumper.cooldown = Math.max(0, bumper.cooldown - dt);
+      }
+      for (let i = scorePopups.length - 1; i >= 0; i--) {
+        const popup = scorePopups[i];
+        popup.y -= 38 * dt;
+        popup.life -= dt;
+        if (popup.life <= 0) scorePopups.splice(i, 1);
+      }
+    }
+
+    function drawBumpers() {
+      for (const bumper of bumpers) {
+        const glow = bumper.flash / 0.22;
+        context.save();
+        context.shadowColor = bumper.color;
+        context.shadowBlur = 14 + glow * 24;
+        context.fillStyle = bumper.flash > 0 ? bumper.color : '#19213c';
+        context.beginPath();
+        context.arc(bumper.x, bumper.y, bumper.radius, 0, Math.PI * 2);
+        context.fill();
+        // 邊線畫在圓形內側，外緣仍是 radius；光暈不屬於碰撞範圍。
+        context.strokeStyle = bumper.color;
+        context.lineWidth = 2;
+        context.beginPath();
+        context.arc(bumper.x, bumper.y, bumper.radius - 1, 0, Math.PI * 2);
+        context.stroke();
+        context.shadowBlur = 0;
+        context.strokeStyle = bumper.flash > 0 ? '#ffffff' : bumper.color;
+        context.lineWidth = 1;
+        context.beginPath();
+        context.arc(bumper.x, bumper.y, 13, 0, Math.PI * 2);
+        context.stroke();
+        context.fillStyle = '#effaff';
+        context.beginPath();
+        context.arc(bumper.x, bumper.y, 3, 0, Math.PI * 2);
+        context.fill();
+        context.restore();
+      }
+    }
+
+    function drawScorePopups() {
+      context.save();
+      context.font = 'bold 15px Consolas, monospace';
+      context.textAlign = 'center';
+      for (const popup of scorePopups) {
+        context.globalAlpha = Math.min(1, popup.life / 0.3);
+        context.fillStyle = popup.color;
+        context.shadowColor = popup.color;
+        context.shadowBlur = 10;
+        context.fillText('+100', popup.x, popup.y);
+      }
+      context.restore();
+    }
+
+    function collideWithBumper(bumper) {
+      const dx = ball.x - bumper.x;
+      const dy = ball.y - bumper.y;
+      const distance = Math.hypot(dx, dy);
+      const separation = ball.radius + bumper.radius;
+      // 球必須離開表面至少 3 像素，才解除接觸鎖定，避免邊界抖動重複計分。
+      if (distance > separation + 3) bumper.touching = false;
+      if (distance > separation) return;
+
+      // 圓形碰撞法線從 Bumper 圓心指向球；重合時選向上，避免除以零。
+      const nx = distance > 0.0001 ? dx / distance : 0;
+      const ny = distance > 0.0001 ? dy / distance : -1;
+      const normalSpeed = ball.vx * nx + ball.vy * ny;
+      const newHit = !bumper.touching && bumper.cooldown === 0 && normalSpeed < 0;
+      bumper.touching = true;
+      // 先推出重疊區，讓球不會卡在 Bumper 裡面。
+      ball.x = bumper.x + nx * (separation + 0.05);
+      ball.y = bumper.y + ny * (separation + 0.05);
+      if (normalSpeed < 0) {
+        // 反轉法線速度；新撞擊再提供額外推力，確保彈開效果明顯。
+        const outwardSpeed = newHit ? Math.max(380, -normalSpeed * restitution + 160)
+          : -normalSpeed * restitution;
+        ball.vx += (outwardSpeed - normalSpeed) * nx;
+        ball.vy += (outwardSpeed - normalSpeed) * ny;
+        const speed = Math.hypot(ball.vx, ball.vy);
+        if (speed > 1100) { ball.vx *= 1100 / speed; ball.vy *= 1100 / speed; }
+      }
+      if (newHit) {
+        // 接觸鎖定加短暫冷卻：同一次碰撞只加一次分，三個 Bumper 各自管理。
+        bumper.cooldown = 0.12;
+        bumper.flash = 0.22;
+        gameState.score += 100;
+        updateStats();
+        scorePopups.push({ x: bumper.x + nx * bumper.radius,
+          y: bumper.y + ny * bumper.radius - 8, color: bumper.color, life: 0.8 });
+      }
+    }
+    // 角度使用弧度。左右擋板朝中央伸出，休息時中央留有出口。
+    const flippers = [
+      { x: 83, y: 399, length: 65, radius: 6, restAngle: 0.40, activeAngle: -0.55,
+        angle: 0.40, angularVelocity: 0, key: 'ArrowLeft', color: '#63e9ff' },
+      { x: 243, y: 399, length: 65, radius: 6, restAngle: Math.PI - 0.40, activeAngle: Math.PI + 0.55,
+        angle: Math.PI - 0.40, angularVelocity: 0, key: 'ArrowRight', color: '#a785ff' }
+    ];
+
+    function updateFlippers(dt) {
+      for (const flipper of flippers) {
+        const target = keys[flipper.key] ? flipper.activeAngle : flipper.restAngle;
+        const difference = target - flipper.angle;
+        // 每一步朝目標角度移動；不累積加速度，按住或按鍵重複都不會越轉越快。
+        const speed = keys[flipper.key] ? 14 : 8;
+        const movement = Math.sign(difference) * Math.min(Math.abs(difference), speed * dt);
+        const minAngle = Math.min(flipper.restAngle, flipper.activeAngle);
+        const maxAngle = Math.max(flipper.restAngle, flipper.activeAngle);
+        const oldAngle = flipper.angle;
+        flipper.angle = Math.max(minAngle, Math.min(maxAngle, oldAngle + movement));
+        flipper.angularVelocity = dt > 0 ? (flipper.angle - oldAngle) / dt : 0;
+      }
+    }
+
+    function drawFlippers() {
+      for (const flipper of flippers) {
+        const tipX = flipper.x + Math.cos(flipper.angle) * flipper.length;
+        const tipY = flipper.y + Math.sin(flipper.angle) * flipper.length;
+        context.save();
+        context.lineCap = 'round';
+        context.shadowColor = flipper.color;
+        context.shadowBlur = 18;
+        context.strokeStyle = flipper.color;
+        context.lineWidth = flipper.radius * 2;
+        context.beginPath();
+        context.moveTo(flipper.x, flipper.y);
+        context.lineTo(tipX, tipY);
+        context.stroke();
+        context.shadowBlur = 0;
+        context.strokeStyle = '#effaff';
+        context.lineWidth = 2;
+        context.stroke();
+        context.fillStyle = '#151c35';
+        context.beginPath();
+        context.arc(flipper.x, flipper.y, 4, 0, Math.PI * 2);
+        context.fill();
+        context.restore();
+      }
+    }
+
+    function collideWithFlipper(flipper) {
+      const dx = Math.cos(flipper.angle) * flipper.length;
+      const dy = Math.sin(flipper.angle) * flipper.length;
+      // 把球心投影到線段，限制在 0～1，端點也能碰撞（含圓角）。
+      const t = Math.max(0, Math.min(1,
+        ((ball.x - flipper.x) * dx + (ball.y - flipper.y) * dy) / (flipper.length ** 2)));
+      const contactX = flipper.x + t * dx;
+      const contactY = flipper.y + t * dy;
+      const offsetX = ball.x - contactX;
+      const offsetY = ball.y - contactY;
+      const distance = Math.hypot(offsetX, offsetY);
+      const separation = ball.radius + flipper.radius;
+      if (distance >= separation) return;
+
+      // 法線從擋板指向球；球心剛好在線上時，選擇朝上的法線避免除以零。
+      let nx = distance > 0.0001 ? offsetX / distance : -Math.sin(flipper.angle);
+      let ny = distance > 0.0001 ? offsetY / distance : Math.cos(flipper.angle);
+      if (distance <= 0.0001 && ny > 0) { nx = -nx; ny = -ny; }
+      // 完整推出重疊區並保留小間隙，避免球卡入擋板。
+      ball.x = contactX + nx * (separation + 0.05);
+      ball.y = contactY + ny * (separation + 0.05);
+
+      // 旋轉表面速度 = 角速度 × 接觸點距離。使用相對速度判斷是否正在撞入。
+      const surfaceVx = -flipper.angularVelocity * (contactY - flipper.y);
+      const surfaceVy = flipper.angularVelocity * (contactX - flipper.x);
+      const approaching = (ball.vx - surfaceVx) * nx + (ball.vy - surfaceVy) * ny;
+      if (approaching < 0) {
+        const impulse = -(1 + restitution) * approaching;
+        ball.vx += impulse * nx;
+        ball.vy += impulse * ny;
+        // 只有擋板向上移動、球在上側時才增加向上擊球力；復位不會額外向上推球。
+        if (surfaceVy < 0 && ny < -0.15) ball.vy -= -surfaceVy * 0.35;
+        // 限制最大速度，讓高速擊球仍能由小步驟可靠偵測碰撞。
+        const speed = Math.hypot(ball.vx, ball.vy);
+        if (speed > 1100) { ball.vx *= 1100 / speed; ball.vy *= 1100 / speed; }
+      }
+    }
+
+    // 方向鍵只記錄按住狀態，並阻止瀏覽器捲動。
+    window.addEventListener('keydown', event => {
+      if (!Object.prototype.hasOwnProperty.call(keys, event.key)) return;
+      event.preventDefault();
+      keys[event.key] = true;
+    });
+    window.addEventListener('keyup', event => {
+      if (!Object.prototype.hasOwnProperty.call(keys, event.key)) return;
+      event.preventDefault();
+      keys[event.key] = false;
+    });
+    function releaseKeys() {
+      keys.ArrowLeft = false;
+      keys.ArrowRight = false;
+      previousTime = null;
+    }
+    window.addEventListener('blur', releaseKeys);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) releaseKeys();
+    });
+
+    function updateStats() {
+      document.getElementById('score').textContent = gameState.score;
+      document.getElementById('high-score').textContent = gameState.highScore;
+      document.getElementById('lives').textContent = gameState.lives;
+      document.getElementById('combo').textContent = 'x' + gameState.combo;
+    }
+
+    // 軌道繪圖和碰撞共用 wallPaths；右側發球槽線仍是背景裝飾。
+    function drawTable() {
+      if (!context) return;
+      context.fillStyle = '#0a0e1b';
+      context.fillRect(0, 0, 340, 480);
+      context.strokeStyle = '#162039';
+      context.lineWidth = 1;
+      for (let x = 20; x < 340; x += 20) {
+        for (let y = 20; y < 480; y += 20) {
+          context.fillStyle = '#28304a';
+          context.fillRect(x, y, 1, 1);
+        }
+      }
+      function neonPath(color, points) {
+        context.strokeStyle = color;
+        context.shadowColor = color;
+        context.shadowBlur = 12;
+        context.lineWidth = 2;
+        context.beginPath();
+        points.forEach(([x, y], index) => index === 0 ? context.moveTo(x, y) : context.lineTo(x, y));
+        context.stroke();
+        context.shadowBlur = 0;
+      }
+      neonPath('#55dfff', [[table.left, table.height], [table.left, table.top], [table.right, table.top], [table.right, table.height]]);
+      for (const wall of wallPaths) neonPath(wall.color, wall.points);
+      neonPath('#48527d', [[316, 91], [316, 445], [294, 445]]);
+      context.fillStyle = '#53607e';
+      context.font = '9px Segoe UI';
+      context.textAlign = 'center';
+      context.fillText('N E O N  /  A R C A D E', 163, 445);
+    }
+
+    function drawBall() {
+      context.save();
+      const shine = context.createRadialGradient(ball.x - 3, ball.y - 3, 1, ball.x, ball.y, ball.radius);
+      shine.addColorStop(0, '#ffffff');
+      shine.addColorStop(0.45, '#c9f5ff');
+      shine.addColorStop(1, '#568cce');
+      context.fillStyle = shine;
+      context.shadowColor = '#63e9ff';
+      context.shadowBlur = 16;
+      context.beginPath();
+      context.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+      context.fill();
+      context.restore();
+    }
+
+    function render() {
+      if (!context) return;
+      drawTable();
+      drawBumpers();
+      drawFlippers();
+      drawBall();
+      drawScorePopups();
+    }
+
+    function resizeCanvas() {
+      if (!context) return;
+      // 只在尺寸變更時設定畫布，避免每一幀重設 Canvas。
+      const pixelRatio = window.devicePixelRatio || 1;
+      canvas.width = Math.round(table.width * pixelRatio);
+      canvas.height = Math.round(table.height * pixelRatio);
+      context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+      render();
+    }
+
+    function collideWithWalls() {
+      // 外牆是最後一道邊界。只在球往牆外移動時反轉，避免重複反彈。
+      const edge = ball.radius + wallRadius;
+      if (ball.x - edge <= table.left) {
+        ball.x = table.left + edge + 0.05;
+        if (ball.vx < 0) ball.vx = -ball.vx * restitution;
+      } else if (ball.x + edge >= table.right) {
+        ball.x = table.right - edge - 0.05;
+        if (ball.vx > 0) ball.vx = -ball.vx * restitution;
+      }
+      if (ball.y - edge <= table.top) {
+        ball.y = table.top + edge + 0.05;
+        if (ball.vy < 0) ball.vy = -ball.vy * restitution;
+      }
+      for (const wall of wallPaths) {
+        for (let i = 1; i < wall.points.length; i++) {
+          const [ax, ay] = wall.points[i - 1];
+          const [bx, by] = wall.points[i];
+          const dx = bx - ax;
+          const dy = by - ay;
+          const lengthSquared = dx * dx + dy * dy;
+          const t = Math.max(0, Math.min(1,
+            ((ball.x - ax) * dx + (ball.y - ay) * dy) / lengthSquared));
+          const closestX = ax + dx * t;
+          const closestY = ay + dy * t;
+          const offsetX = ball.x - closestX;
+          const offsetY = ball.y - closestY;
+          const distance = Math.hypot(offsetX, offsetY);
+          if (distance > edge) continue;
+          const length = Math.sqrt(lengthSquared);
+          // 法線從軌道指向球；剛好在線上時選用線段朝台內的垂直方向。
+          const nx = distance > 0.0001 ? offsetX / distance : -dy / length;
+          const ny = distance > 0.0001 ? offsetY / distance : dx / length;
+          ball.x = closestX + nx * (edge + 0.05);
+          ball.y = closestY + ny * (edge + 0.05);
+          const normalSpeed = ball.vx * nx + ball.vy * ny;
+          if (normalSpeed < 0) {
+            // 只反轉撞向牆的法線分量，保留沿牆速度，斜牆也能自然反彈。
+            ball.vx -= (1 + restitution) * normalSpeed * nx;
+            ball.vy -= (1 + restitution) * normalSpeed * ny;
+          }
+        }
+      }
+    }
+
+    function updateBall(dt) {
+      ball.vy += gravity * dt;
+      ball.x += ball.vx * dt;
+      ball.y += ball.vy * dt;
+      collideWithWalls();
+
+      for (const bumper of bumpers) collideWithBumper(bumper);
+      for (const flipper of flippers) collideWithFlipper(flipper);
+      // 擋板或 Bumper 推開球後再次修正牆面重疊。
+      collideWithWalls();
+
+      // 底部保持開放；掉出畫布後停止，不修改分數或生命。
+      if (ball.y - ball.radius > table.height) {
+        running = false;
+        overlay.hidden = false;
+        document.getElementById('status-title').textContent = 'TRY AGAIN';
+        document.getElementById('status-message').textContent = '彈珠已掉出，按 Start Game 重新發球';
+      }
+    }
+
+    function animate(timestamp) {
+      // 使用實際經過秒數，避免不同螢幕更新率造成速度差異。
+      // 切回分頁時最多前進 0.05 秒，防止彈珠突然跳過整個畫面。
+      const dt = previousTime === null ? 0 : Math.min((timestamp - previousTime) / 1000, 0.05);
+      previousTime = timestamp;
+      // 依球速與擋板尖端最大速度細分：每步相對移動不超過約 3 像素。
+      // 這比球與擋板厚度小，避免高速球或快速旋轉的擋板穿過彼此。
+      const relativeSpeed = Math.hypot(ball.vx, ball.vy) + 14 * 65 + gravity * dt;
+      const steps = Math.max(1, Math.ceil(dt * Math.max(240, relativeSpeed / 3)));
+      for (let i = 0; i < steps; i++) {
+        updateBumperEffects(dt / steps);
+        updateFlippers(dt / steps);
+        if (running) updateBall(dt / steps);
+      }
+      render();
+      // 共用原本迴圈；尚未發球或掉球後仍可操作擋板。
+      animationId = requestAnimationFrame(animate);
+    }
+
+    document.getElementById('start-button').addEventListener('click', () => {
+      if (!context) return;
+      // 取消舊動畫，連續按按鈕也只會有一個動畫迴圈。
+      if (animationId !== null) cancelAnimationFrame(animationId);
+      Object.assign(ball, { x: 163, y: 290, vx: 230, vy: -330 });
+      gameState.score = 0;
+      updateStats();
+      scorePopups.length = 0;
+      for (const bumper of bumpers) {
+        bumper.flash = 0;
+        bumper.touching = false;
+        bumper.cooldown = 0;
+      }
+      for (const flipper of flippers) {
+        flipper.angle = flipper.restAngle;
+        flipper.angularVelocity = 0;
+      }
+      previousTime = null;
+      running = true;
+      overlay.hidden = true;
+      render();
+      animationId = requestAnimationFrame(animate);
+    });
+
+    updateStats();
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    if (context) animationId = requestAnimationFrame(animate);
+  </script>
+</body>
+</html>
